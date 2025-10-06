@@ -497,9 +497,98 @@ else:
         st.markdown("---")
         
         # Tabs for different analyses
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["🎯 Optimization", "📊 P&L Waterfall", "💰 Revenue Analysis", "💸 Cost Analysis", "📋 Detailed Data"])
+        if has_time_dimension and period_selection == "Trend Analysis":
+            tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📈 Trends", "🎯 Optimization", "📊 P&L Waterfall", "💰 Revenue Analysis", "💸 Cost Analysis", "📋 Detailed Data"])
+        else:
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["🎯 Optimization", "📊 P&L Waterfall", "💰 Revenue Analysis", "💸 Cost Analysis", "📋 Detailed Data"])
         
-        with tab1:
+        # Trend Analysis Tab (only if time dimension exists)
+        if has_time_dimension and period_selection == "Trend Analysis":
+            with tab1:
+                st.header("📈 Month-over-Month Trend Analysis")
+                
+                # Create trend dataframe
+                trend_metrics = []
+                for period in sorted(df['month_name'].unique()):
+                    period_df = df[df['month_name'] == period]
+                    period_metrics = calculate_metrics(period_df)
+                    trend_metrics.append({
+                        'Period': period,
+                        'Revenue': period_metrics['total_revenue'],
+                        'Gross Profit': period_metrics['gross_profit'],
+                        'EBITDA': period_metrics['ebitda'],
+                        'EBIT': period_metrics['ebit'],
+                        'PBT': period_metrics['pbt'],
+                        'Gross Margin %': period_metrics['gross_margin'],
+                        'EBITDA Margin %': period_metrics['ebitda_margin'],
+                        'EBIT Margin %': period_metrics['ebit_margin']
+                    })
+                
+                trend_df = pd.DataFrame(trend_metrics)
+                
+                # Revenue & Profit Trends
+                st.subheader("💰 Revenue & Profitability Trends")
+                fig_trend1 = go.Figure()
+                fig_trend1.add_trace(go.Scatter(x=trend_df['Period'], y=trend_df['Revenue'], 
+                                               mode='lines+markers', name='Revenue', line=dict(width=3)))
+                fig_trend1.add_trace(go.Scatter(x=trend_df['Period'], y=trend_df['Gross Profit'], 
+                                               mode='lines+markers', name='Gross Profit'))
+                fig_trend1.add_trace(go.Scatter(x=trend_df['Period'], y=trend_df['EBITDA'], 
+                                               mode='lines+markers', name='EBITDA'))
+                fig_trend1.add_trace(go.Scatter(x=trend_df['Period'], y=trend_df['EBIT'], 
+                                               mode='lines+markers', name='EBIT'))
+                fig_trend1.update_layout(height=500, title="Financial Performance Over Time",
+                                        yaxis_title="Amount ($)", xaxis_title="Period")
+                st.plotly_chart(fig_trend1, use_container_width=True)
+                
+                # Margin Trends
+                st.subheader("📊 Margin Trends")
+                fig_trend2 = go.Figure()
+                fig_trend2.add_trace(go.Scatter(x=trend_df['Period'], y=trend_df['Gross Margin %'], 
+                                               mode='lines+markers', name='Gross Margin', line=dict(width=3)))
+                fig_trend2.add_trace(go.Scatter(x=trend_df['Period'], y=trend_df['EBITDA Margin %'], 
+                                               mode='lines+markers', name='EBITDA Margin'))
+                fig_trend2.add_trace(go.Scatter(x=trend_df['Period'], y=trend_df['EBIT Margin %'], 
+                                               mode='lines+markers', name='EBIT Margin'))
+                fig_trend2.update_layout(height=500, title="Margin Performance Over Time",
+                                        yaxis_title="Margin (%)", xaxis_title="Period")
+                st.plotly_chart(fig_trend2, use_container_width=True)
+                
+                # MoM Growth Analysis
+                st.subheader("📈 Month-over-Month Growth")
+                if len(trend_df) > 1:
+                    mom_growth = pd.DataFrame({
+                        'Period': trend_df['Period'].iloc[1:].values,
+                        'Revenue Growth %': ((trend_df['Revenue'].iloc[1:].values - trend_df['Revenue'].iloc[:-1].values) / 
+                                           trend_df['Revenue'].iloc[:-1].values * 100),
+                        'EBITDA Growth %': ((trend_df['EBITDA'].iloc[1:].values - trend_df['EBITDA'].iloc[:-1].values) / 
+                                          trend_df['EBITDA'].iloc[:-1].abs().values * 100)
+                    })
+                    
+                    fig_growth = go.Figure()
+                    fig_growth.add_trace(go.Bar(x=mom_growth['Period'], y=mom_growth['Revenue Growth %'], 
+                                               name='Revenue Growth %', marker_color='lightblue'))
+                    fig_growth.add_trace(go.Bar(x=mom_growth['Period'], y=mom_growth['EBITDA Growth %'], 
+                                               name='EBITDA Growth %', marker_color='lightgreen'))
+                    fig_growth.update_layout(height=400, title="Month-over-Month Growth Rates",
+                                           yaxis_title="Growth (%)", barmode='group')
+                    st.plotly_chart(fig_growth, use_container_width=True)
+                
+                # Period comparison table
+                st.subheader("📋 Period Comparison Table")
+                comparison_df = trend_df.copy()
+                for col in ['Revenue', 'Gross Profit', 'EBITDA', 'EBIT', 'PBT']:
+                    comparison_df[col] = comparison_df[col].apply(lambda x: f"${x:,.0f}")
+                for col in ['Gross Margin %', 'EBITDA Margin %', 'EBIT Margin %']:
+                    comparison_df[col] = comparison_df[col].apply(lambda x: f"{x:.1f}%")
+                st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+            
+            # Adjust tab references for remaining tabs
+            opt_tab, waterfall_tab, rev_tab, cost_tab, data_tab = tab2, tab3, tab4, tab5, tab6
+        else:
+            opt_tab, waterfall_tab, rev_tab, cost_tab, data_tab = tab1, tab2, tab3, tab4, tab5
+        
+        with opt_tab:
             st.header("🎯 Strategic Optimization Recommendations")
             st.markdown("*Based on investment banking best practices and industry benchmarks*")
             
@@ -530,7 +619,7 @@ else:
                 if total_potential_impact > 0:
                     st.markdown(f"**Estimated annual savings potential: ${total_potential_impact:,.0f}**")
         
-        with tab2:
+        with waterfall_tab:
             st.header("📊 P&L Waterfall Analysis")
             
             # Create waterfall data
@@ -590,7 +679,7 @@ else:
             fig2.update_layout(height=400, showlegend=False)
             st.plotly_chart(fig2, use_container_width=True)
         
-        with tab3:
+        with rev_tab:
             st.header("💰 Revenue Analysis")
             
             # Revenue by category
@@ -624,7 +713,7 @@ else:
             else:
                 st.success("✅ Healthy revenue diversification")
         
-        with tab4:
+        with cost_tab:
             st.header("💸 Cost Analysis")
             
             # Combined cost analysis
@@ -692,7 +781,7 @@ else:
             fig5.update_layout(height=500, xaxis_tickangle=-45)
             st.plotly_chart(fig5, use_container_width=True)
         
-        with tab5:
+        with data_tab:
             st.header("📋 Detailed Transaction Data")
             
             # Filters
@@ -722,9 +811,14 @@ else:
                     filtered_df['name'].str.contains(search_term, case=False, na=False)
                 ]
             
+            # Display columns based on whether time dimension exists
+            display_cols = ['gl_code', 'name', 'category', 'type', 'amount']
+            if has_time_dimension and 'month_name' in filtered_df.columns:
+                display_cols.insert(1, 'month_name')
+            
             # Display data
             st.dataframe(
-                filtered_df[['gl_code', 'name', 'category', 'type', 'amount']].sort_values('amount', ascending=False),
+                filtered_df[display_cols].sort_values('amount', ascending=False),
                 use_container_width=True,
                 height=600
             )
